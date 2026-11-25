@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipe Beli Paket MyTelkomsel (PRD + UX Skill)</title>
+<style>
+:root{--red:#c4000f;--ink:#1a1a1a;--mut:#555;--bg:#f4f5f7;--ok:#0a6b2d;--err:#a8201a;--wait:#8a5a00}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+#app{max-width:430px;margin:0 auto;min-height:100vh;padding:16px 16px 92px}
+h1{font-size:20px;margin:4px 0 12px}h1:focus{outline:none}h2{font-size:17px;margin:0 0 8px}
+.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px #0001}
+.btn{display:block;width:100%;min-height:48px;padding:12px;border:2px solid var(--red);border-radius:10px;background:var(--red);color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;margin-top:8px}
+.btn.sec{background:#fff;color:var(--red)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #0050d0;outline-offset:2px}
+.chip{display:inline-block;padding:2px 10px;border-radius:99px;font-size:14px;font-weight:700}
+.Berhasil{background:#dff3e4;color:var(--ok)}.Gagal{background:#fbe4e2;color:var(--err)}.Diproses{background:#fff0d1;color:var(--wait)}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #ccc;display:flex;max-width:430px;margin:0 auto}
+nav button{flex:1;min-height:56px;padding:8px 4px;border:0;background:none;font-family:inherit;font-size:14px;color:var(--mut)}
+nav button[aria-current=page]{color:var(--red);font-weight:700;border-top:3px solid var(--red)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #e5e5e5;text-align:left}
+.sp{width:36px;height:36px;border:4px solid #ddd;border-top-color:var(--red);border-radius:50%;animation:s 1s linear infinite;margin:16px auto}
+@keyframes s{to{transform:rotate(360deg)}}
+.hemat .sp,.hemat *{animation:none!important}
+@media (prefers-reduced-motion:reduce){.sp{animation:none}}
+.demo{font-size:14px;color:var(--mut)}
+.steps{margin-bottom:12px}.steps b{font-size:14px;color:var(--mut)}
+.bar{height:6px;background:#ddd;border-radius:3px;margin-top:4px}.bar i{display:block;height:6px;background:var(--red);border-radius:3px}
+#toast{position:fixed;top:12px;left:12px;right:12px;max-width:406px;margin:0 auto;background:#1a1a1a;color:#fff;padding:12px 14px;border-radius:10px;display:none;z-index:9}
+select{font-size:16px;min-height:44px;padding:6px}
+label{min-height:44px;display:flex;align-items:center;gap:8px}
+.best{color:var(--ok);font-weight:700}
+</style>
+</head>
+<body>
+<div id="toast" role="status"></div>
+<div id="live" class="sr" aria-live="polite" style="position:absolute;left:-9999px"></div>
+<div id="app"></div>
+<nav id="nav" aria-label="Menu utama"></nav>
+<script>
+const PK=[
+{id:'p4',n:'Data 3 GB',gb:3,h:20000,d:'3 hari'},
+{id:'p1',n:'Data 5 GB',gb:5,h:35000,d:'7 hari'},
+{id:'p2',n:'Data 12 GB',gb:12,h:65000,d:'30 hari'},
+{id:'p3',n:'Data 25 GB',gb:25,h:100000,d:'30 hari'}];
+const rp=n=>'Rp'+n.toLocaleString('id-ID');
+const pk=id=>PK.find(p=>p.id===id);
+const ICON={Berhasil:'✓',Gagal:'✕',Diproses:'…'};
+const chip=s=>`<span class="chip ${s}">${ICON[s]} ${s}</span>`;
+let S={view:'beranda',kuota:1.2,sel:null,cmp:[],vstep:0,fail:false,hemat:false,hist:[],cur:0,f:'semua',t:'semua',msg:''};
+try{S.hist=JSON.parse(localStorage.getItem('h')||'[]');S.kuota=parseFloat(localStorage.getItem('k'))||1.2}catch(e){}
+const save=()=>{try{localStorage.setItem('h',JSON.stringify(S.hist));localStorage.setItem('k',S.kuota)}catch(e){}};
+const NAV=[['beranda','Beranda'],['paket','Beli Paket'],['riwayat','Riwayat Transaksi'],['bantuan','Bantuan']];
+const FLOW=['paket','banding','verif','bayar','proses','konfirmasi'];
+const STEP={paket:[1,'Pilih paket'],banding:[2,'Bandingkan paket'],verif:[3,'Verifikasi nomor'],bayar:[4,'Pembayaran'],proses:[4,'Pembayaran'],konfirmasi:[5,'Konfirmasi hasil']};
+const stepper=()=>{const s=STEP[S.view];return s?`<div class="steps"><b>Langkah ${s[0]} dari 5: ${s[1]}</b><div class="bar"><i style="width:${s[0]*20}%"></i></div></div>`:''};
+const back=v=>`<button class="btn sec" data-a="go" data-v="${v}">Kembali</button>`;
+const D=t=>`<table><tr><td>Paket</td><td>${t.paket}</td></tr><tr><td>Harga</td><td>${rp(t.harga)}</td></tr><tr><td>Waktu</td><td>${t.waktu}</td></tr><tr><td>ID transaksi</td><td>${t.id}</td></tr></table>`;
+function V(){
+ const v=S.view;
+ if(v==='beranda'){const t=S.hist[0];return `<h1 tabindex="-1">MyTelkomsel</h1>
+ <div class="card"><div>Sisa kuota</div><h2>${S.kuota.toFixed(1)} GB</h2></div>
+ <button class="btn" data-a="go" data-v="paket">Beli Paket</button>
+ <div class="card" style="margin-top:12px"><b>Status transaksi terakhir</b>${t?`<div class="row"><span>${t.paket}</span>${chip(t.status)}</div><div class="demo">${t.waktu}</div><button class="btn sec" data-a="det" data-i="0">Lihat detail</button>`:'<p>Belum ada transaksi. Mulai dari Beli Paket.</p>'}</div>
+ <label class="card"><input type="checkbox" data-a="hemat" ${S.hemat?'checked':''}> Mode Hemat Data (tampilan lebih ringan)</label>
+ <p class="demo">Prototipe dengan data contoh, bukan aplikasi resmi Telkomsel.</p>`}
+ if(v==='paket')return `${stepper()}<h1 tabindex="-1">Pilih Paket</h1>${PK.map(p=>`<div class="card"><div class="row"><b>${p.n}</b><b>${rp(p.h)}</b></div><div class="demo">Masa aktif ${p.d}</div>
+ <button class="btn" data-a="pick" data-id="${p.id}">Pilih ${p.n}</button>
+ <button class="btn sec" data-a="cmp" data-id="${p.id}" aria-pressed="${S.cmp.includes(p.id)}">${S.cmp.includes(p.id)?'Dipilih untuk dibandingkan ✓':'Bandingkan'}</button></div>`).join('')}
+ <button class="btn" data-a="go" data-v="banding" ${S.cmp.length<2?'disabled':''}>Lihat perbandingan (${S.cmp.length} dari 2 paket)</button>${S.cmp.length<2?'<p class="demo">Pilih 2 paket dengan tombol Bandingkan.</p>':''}`;
+ if(v==='banding'){const [a,b]=S.cmp.map(pk),pa=Math.round(a.h/a.gb),pb=Math.round(b.h/b.gb);return `${stepper()}<h1 tabindex="-1">Bandingkan Paket</h1><div class="card"><table><tr><th></th><th>${a.n}</th><th>${b.n}</th></tr>
+ <tr><td>Kuota</td><td>${a.gb} GB</td><td>${b.gb} GB</td></tr><tr><td>Harga</td><td>${rp(a.h)}</td><td>${rp(b.h)}</td></tr>
+ <tr><td>Masa aktif</td><td>${a.d}</td><td>${b.d}</td></tr><tr><td>Harga per GB</td><td class="${pa<=pb?'best':''}">${rp(pa)}${pa<=pb?' (lebih hemat)':''}</td><td class="${pb<=pa?'best':''}">${rp(pb)}${pb<=pa?' (lebih hemat)':''}</td></tr></table></div>
+ <button class="btn" data-a="pick" data-id="${a.id}">Pilih ${a.n}</button><button class="btn" data-a="pick" data-id="${b.id}">Pilih ${b.n}</button>${back('paket')}`}
+ if(v==='verif')return `${stepper()}<h1 tabindex="-1">Verifikasi Nomor</h1><div class="card"><p>Nomor: 0812-****-1234</p>${S.vstep===0?
+ `<p>Kami perlu memastikan nomor ini milik kamu sebelum pembayaran.</p><button class="btn" data-a="v1">Verifikasi nomor</button>`:
+ `<p><b>Diminta verifikasi ulang</b></p><p>Alasan: demi keamanan, pembelian perlu dikonfirmasi sekali lagi.</p><p>Pembelian ${S.sel.n} belum diproses sampai langkah ini selesai.</p><button class="btn" data-a="v2">Konfirmasi dan lanjut ke pembayaran</button>`}</div>${back('paket')}`;
+ if(v==='bayar')return `${stepper()}<h1 tabindex="-1">Pembayaran</h1><div class="card"><div class="row"><span>${S.sel.n}</span><b>${rp(S.sel.h)}</b></div></div>
+ <fieldset class="card"><legend>Metode bayar</legend><label><input type="radio" name="m" checked> Pulsa</label><label><input type="radio" name="m"> E-wallet</label><label><input type="radio" name="m"> Transfer bank</label></fieldset>
+ <label class="demo"><input type="checkbox" data-a="fail" ${S.fail?'checked':''}> Simulasikan transaksi gagal (demo)</label>
+ <button class="btn" data-a="pay">Bayar ${rp(S.sel.h)}</button>${back('verif')}`;
+ if(v==='proses')return `${stepper()}<h1 tabindex="-1">Pembayaran</h1><div class="card" style="text-align:center">${chip('Diproses')}<div class="sp"></div><p id="ps">${S.msg}</p><p class="demo">Jangan tutup halaman ini. Hasilnya muncul otomatis.</p></div>`;
+ if(v==='konfirmasi'){const t=S.hist[0],ok=t.status==='Berhasil';return `${stepper()}<h1 tabindex="-1">${ok?'Pembelian berhasil':'Pembayaran gagal'}</h1><div class="card">${chip(t.status)}${D(t)}
+ ${ok?`<p>Kuota ${t.paket} sudah ditambahkan. Sisa kuota kamu sekarang ${S.kuota.toFixed(1)} GB.</p>`:'<p>Pembayaran belum berhasil. Kamu bisa mencoba lagi atau membuka Bantuan.</p>'}</div>
+ <button class="btn" data-a="det" data-i="0">Lihat Riwayat</button>${ok?'':'<button class="btn sec" data-a="retry">Coba bayar lagi</button><button class="btn sec" data-a="go" data-v="bantuan">Buka Bantuan</button>'}
+ <button class="btn sec" data-a="go" data-v="beranda">Kembali ke Beranda</button>`}
+ if(v==='riwayat'){const L=S.hist.map((t,i)=>[t,i]).filter(([t])=>(S.f==='semua'||t.status===S.f)&&(S.t==='semua'||new Date(t.ts).toDateString()===new Date().toDateString()));
+ return `<h1 tabindex="-1">Riwayat Transaksi</h1><div class="card row"><select aria-label="Filter status" data-a="ff"><option value="semua">Semua status</option><option ${S.f==='Berhasil'?'selected':''}>Berhasil</option><option ${S.f==='Gagal'?'selected':''}>Gagal</option></select>
+ <select aria-label="Filter tanggal" data-a="ft"><option value="semua">Semua tanggal</option><option value="hari" ${S.t==='hari'?'selected':''}>Hari ini</option></select></div>
+ ${L.length?L.map(([t,i])=>`<div class="card"><div class="row"><b>${t.paket}</b>${chip(t.status)}</div><div class="demo">${t.waktu}</div><button class="btn sec" data-a="det" data-i="${i}">Lihat detail ${t.paket}</button></div>`).join(''):'<div class="card">Belum ada transaksi yang cocok dengan filter ini.</div>'}`}
+ if(v==='detail'){const t=S.hist[S.cur];return `<h1 tabindex="-1">Detail Transaksi</h1><div class="card">${chip(t.status)}${D(t)}</div>${back('riwayat')}`}
+ if(v==='bantuan')return `<h1 tabindex="-1">Bantuan</h1><div class="card"><details><summary>Transaksi gagal atau tertunda</summary><p>Cek status di Riwayat Transaksi. Jika statusnya Gagal, kamu bisa mencoba pembayaran lagi.</p></details>
+ <details><summary>Kenapa diminta verifikasi ulang?</summary><p>Verifikasi ulang dipakai untuk keamanan. Pembelian baru diproses setelah verifikasi selesai.</p></details></div>`;
+}
+function R(focus){
+ const app=document.getElementById('app');
+ app.innerHTML=V();app.className=S.hemat?'hemat':'';
+ const on=FLOW.includes(S.view)?'paket':S.view==='detail'?'riwayat':S.view;
+ document.getElementById('nav').innerHTML=NAV.map(([k,l])=>`<button data-a="go" data-v="${k}" ${on===k?'aria-current="page"':''}>${l}</button>`).join('');
+ if(focus){const h=app.querySelector('h1');if(h){h.focus();document.getElementById('live').textContent=h.textContent}}
+}
+function go(v){S.view=v;R(true);scrollTo(0,0)}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',4000)}
+function startPay(){
+ S.view='proses';S.msg='Menghubungi penyedia pembayaran…';R(true);
+ setTimeout(()=>{if(S.view==='proses'){S.msg='Menunggu konfirmasi pembayaran…';const p=document.getElementById('ps');if(p)p.textContent=S.msg;document.getElementById('live').textContent=S.msg}},1200);
+ setTimeout(finish,2600);
+}
+function finish(){
+ if(S.view!=='proses')return;
+ const ok=!S.fail,p=S.sel,n=new Date();
+ S.hist.unshift({id:'TRX'+String(Date.now()).slice(-6),paket:p.n,harga:p.h,waktu:n.toLocaleString('id-ID'),ts:n.getTime(),status:ok?'Berhasil':'Gagal'});
+ if(ok)S.kuota+=p.gb;
+ save();S.view='konfirmasi';R(true);
+ toast(ok?`Notifikasi: pembelian ${p.n} berhasil.`:`Notifikasi: pembayaran ${p.n} gagal.`);
+}
+document.addEventListener('click',e=>{
+ const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,d=t.dataset;
+ if(a==='go')go(d.v);
+ else if(a==='pick'){S.sel=pk(d.id);S.vstep=0;go('verif')}
+ else if(a==='cmp'){S.cmp=S.cmp.includes(d.id)?S.cmp.filter(x=>x!==d.id):[...S.cmp,d.id].slice(-2);R()}
+ else if(a==='v1'){S.vstep=1;R(true)}
+ else if(a==='v2')go('bayar');
+ else if(a==='pay'||a==='retry')startPay();
+ else if(a==='det'){S.cur=+d.i;go('detail')}
+});
+document.addEventListener('change',e=>{
+ const a=e.target.dataset.a;
+ if(a==='hemat'){S.hemat=e.target.checked;R()}
+ else if(a==='fail')S.fail=e.target.checked;
+ else if(a==='ff'){S.f=e.target.value;R()}
+ else if(a==='ft'){S.t=e.target.value;R()}
+});
+R();
+</script>
+</body>
+</html>
