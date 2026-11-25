@@ -170,8 +170,7 @@ Jalankan lokal: buka `index.html` di browser (tidak perlu instalasi).
 
 Deploy dengan GitHub Pages: **Settings, Pages, Deploy from a branch, branch `main`, folder `/ (root)`**, lalu simpan. Setelah selesai, tulis tautannya di bawah.
 
-- Demo: _(isi tautan GitHub Pages di sini setelah deploy)_
-
+- Demo: https://kurniaa13.github.io/mytelkomsel-prd-ux-skill/
 ## Sumber
 
 Worksheet 1 (UX Detective), 3 (Know Your User), 5 (Observasi Pengguna), 6 (Empathy Map dan Persona), 7 (User Journey), 8 (UX Requirements), 9 (Information Architecture). Mata kuliah Rekayasa Interaksi (UX), Universitas Muhammadiyah Malang.
